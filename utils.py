@@ -106,9 +106,13 @@ class LinkedinUrlGenerate:
         path = []
         for location in config.location:
             for keyword in config.keywords:
-                    url = constants.linkJobUrl + "?f_AL=true&keywords=" +keyword+self.jobType()+self.remote()+self.checkJobLocation(location)+self.jobExp()+self.datePosted()+self.salary()+self.sortBy()
+                    url = constants.linkJobUrl + "?keywords=" +keyword+self.jobType()+self.remote()+self.checkJobLocation(location)+self.jobExp()+self.datePosted()+self.salary()+self.sortBy()+self.easyApply()
                     path.append(url)
         return path
+
+    def easyApply(self):
+        # Add the Easy Apply filter to the URL
+        return "&f_AL=true"
 
     def checkJobLocation(self,job):
         jobLoc = "&location=" +job
