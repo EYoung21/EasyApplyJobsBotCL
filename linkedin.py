@@ -175,42 +175,104 @@ class Linkedin:
         textToWrite = ""
         jobTitle = ""
         jobLocation = ""
+        companyName = ""
+        timeAgoPosted = ""
+        jobDescription = ""
 
         try:
-            jobTitle = self.driver.find_element(By.XPATH, "//h1[contains(@class, 'job-title')]").get_attribute("innerHTML").strip()
+            # Updated selector for job title
+            jobTitle = self.driver.find_element(By.CSS_SELECTOR, "h1.t-24.t-bold.inline").text.strip()
             res = [blItem for blItem in config.blackListTitles if (blItem.lower() in jobTitle.lower())]
-            if (len(res) > 0):
-                jobTitle += "(blacklisted title: " + ' '.join(res) + ")"
+            if res:
+                jobTitle += " (Blacklisted title: " + ' '.join(res) + ")"
         except Exception as e:
-            if (config.displayWarnings):
-                utils.prYellow("⚠️ Warning in getting jobTitle: " + str(e)[0:50])
-            jobTitle = ""
+            # If the first selector fails, try the original one as backup
+            try:
+                jobTitle = self.driver.find_element(By.XPATH, "//h1[contains(@class, 'job-title')]").text.strip()
+            except:
+                if config.displayWarnings:
+                    utils.prYellow(f"⚠️ Warning in getting jobTitle: {str(e)}")
+                jobTitle = ""
 
         try:
-            time.sleep(5)
-            jobDetail = self.driver.find_element(By.XPATH, "//div[contains(@class, 'job-details-jobs')]//div").text.replace("·", "|")
-            res = [blItem for blItem in config.blacklistCompanies if (blItem.lower() in jobTitle.lower())]
-            if (len(res) > 0):
-                jobDetail += "(blacklisted company: " + ' '.join(res) + ")"
+            # Try finding by link with the specific ember-view class and job details attribute
+            companyName = self.driver.find_element(By.CSS_SELECTOR, "a.ember-view[data-view-name='job-details-about-company-name-link']").text.strip()
         except Exception as e:
-            if (config.displayWarnings):
-                print(e)
-                utils.prYellow("⚠️ Warning in getting jobDetail: " + str(e)[0:100])
-            jobDetail = ""
+            try:
+                # Fallback to looking for any link with ember-view and link-without-visited-state classes
+                companyName = self.driver.find_element(By.CSS_SELECTOR, "a.ember-view.link-without-visited-state").text.strip()
+            except:
+                try:
+                    # Last attempt - just look for the ember view with inline-block
+                    companyName = self.driver.find_element(By.CSS_SELECTOR, "a.ember-view.inline-block").text.strip()
+                except:
+                    if config.displayWarnings:
+                        utils.prYellow(f"⚠️ Warning in getting companyName: {str(e)}")
+                    companyName = "Unknown Company"
 
         try:
-            jobWorkStatusSpans = self.driver.find_elements(By.XPATH, "//span[contains(@class,'ui-label ui-label--accent-3 text-body-small')]//span[contains(@aria-hidden,'true')]")
-            for span in jobWorkStatusSpans:
-                jobLocation = jobLocation + " | " + span.text
+            # Find all spans with low-emphasis class in the primary description container
+            spans = self.driver.find_elements(By.CSS_SELECTOR, ".job-details-jobs-unified-top-card__primary-description-container span.tvm__text.tvm__text--low-emphasis")
+            # First span should be location
+            if spans:
+                jobLocation = spans[0].text.strip()
+            else:
+                raise Exception("No spans found")
+        except Exception as e:
+            # Original fallbacks
+            try:
+                jobLocation = self.driver.find_element(By.XPATH, "//span[contains(@class, 'topcard__flavor--bullet')]").text.strip()
+            except:
+                try:
+                    jobLocation = self.driver.find_element(By.CLASS_NAME, "jobs-unified-top-card__bullet").text.strip()
+                except:
+                    if config.displayWarnings:
+                        utils.prYellow(f"⚠️ Warning in getting jobLocation: {str(e)}")
+                    jobLocation = "Unknown Location"
+
+        try:
+            # Get all spans with low-emphasis class in the primary description container
+            description_container = self.driver.find_element(By.CSS_SELECTOR, ".job-details-jobs-unified-top-card__primary-description-container")
+            spans = description_container.find_elements(By.CSS_SELECTOR, "span.tvm__text.tvm__text--low-emphasis")
+            
+            # The second span contains the post date (after location)
+            if len(spans) >= 2:
+                timeAgoPosted = spans[2].text.strip()
+            else:
+                raise Exception("Not enough spans found")
 
         except Exception as e:
-            if (config.displayWarnings):
-                print(e)
-                utils.prYellow("⚠️ Warning in getting jobLocation: " + str(e)[0:100])
-            jobLocation = ""
+            try:
+                # Fallback: Try finding among any low-emphasis spans
+                all_spans = self.driver.find_elements(By.CSS_SELECTOR, "span.tvm__text.tvm__text--low-emphasis")
+                for span in all_spans:
+                    text = span.text.strip()
+                    if 'ago' in text or 'hour' in text or 'day' in text or 'week' in text or 'month' in text:
+                        timeAgoPosted = text
+                        break
+                else:
+                    timeAgoPosted = "Unknown Date"
+            except:
+                if config.displayWarnings:
+                    utils.prYellow(f"⚠️ Warning in getting timeAgoPosted: {str(e)}")
+                timeAgoPosted = "Unknown Date"
+        # try:
+        #     # Fetch job description
+        #     jobDescriptionElement = self.driver.find_element(By.XPATH, "//div[contains(@class, 'show-more-less-html__markup')]")
+        #     jobDescription = jobDescriptionElement.text[:300] + "..." if len(jobDescriptionElement.text) > 300 else jobDescriptionElement.text
+        # except Exception as e:
+        #     if config.displayWarnings:
+        #         utils.prYellow(f"⚠️ Warning in getting jobDescription: {str(e)}")
+        #     jobDescription = "Description not available"
 
-        textToWrite = str(count) + " | " + jobTitle +" | " + jobDetail + jobLocation
+        # Construct detailed job properties string
+        textToWrite = (
+            f"{count} | Job Title: {jobTitle} | Company: {companyName} | Location: {jobLocation} "
+            f"| Posted: {timeAgoPosted}"
+        )
+
         return textToWrite
+
 
     def easyApplyButton(self):
         try:

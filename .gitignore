@@ -177,3 +177,7 @@ geckodriver.log
 angelco.py
 globalLogicCode.py
 linkedinProCode.py
+
+
+#adding config.py here
+config.py
