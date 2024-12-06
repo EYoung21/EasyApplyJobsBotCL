@@ -7,6 +7,7 @@ from selenium.webdriver.common.by import By
 
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service as ChromeService
+from datetime import datetime
 
 class Linkedin:
     def __init__(self):
@@ -268,7 +269,7 @@ class Linkedin:
         # Construct detailed job properties string
         textToWrite = (
             f"{count} | Job Title: {jobTitle} | Company: {companyName} | Location: {jobLocation} "
-            f"| Posted: {timeAgoPosted}"
+            f"| Posted: {timeAgoPosted} | Time Applied {datetime.now().strftime("%Y-%m-%d")}" #adds curr date
         )
 
         return textToWrite
