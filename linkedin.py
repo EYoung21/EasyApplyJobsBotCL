@@ -70,91 +70,106 @@ class Linkedin:
             utils.prRed("❌ Couldn't generate urls, make sure you have editted config file line 25-39")
 
     def linkJobApply(self):
-        self.generateUrls()
-        countApplied = 0
-        countJobs = 0
+        try:
+            self.generateUrls()
+            countApplied = 0
+            countJobs = 0
 
-        urlData = utils.getUrlDataFile()
+            urlData = utils.getUrlDataFile()
 
-        for url in urlData:        
-            self.driver.get(url)
-            time.sleep(random.uniform(1, constants.botSpeed))
-
-            totalJobs = self.driver.find_element(By.XPATH,'//small').text 
-            totalPages = utils.jobsToPages(totalJobs)
-
-            urlWords =  utils.urlToKeywords(url)
-            lineToWrite = "\n Category: " + urlWords[0] + ", Location: " +urlWords[1] + ", Applying " +str(totalJobs)+ " jobs."
-            self.displayWriteResults(lineToWrite)
-
-            for page in range(totalPages):
-                currentPageJobs = constants.jobsPerPage * page
-                url = url +"&start="+ str(currentPageJobs)
-                self.driver.get(url)
-                time.sleep(random.uniform(1, constants.botSpeed))
-
-                offersPerPage = self.driver.find_elements(By.XPATH, '//li[@data-occludable-job-id]')
-                offerIds = [(offer.get_attribute(
-                    "data-occludable-job-id").split(":")[-1]) for offer in offersPerPage]
-                time.sleep(random.uniform(1, constants.botSpeed))
-
-                for offer in offersPerPage:
-                    if not self.element_exists(offer, By.XPATH, ".//*[contains(text(), 'Applied')]"):
-                        offerId = offer.get_attribute("data-occludable-job-id")
-                        offerIds.append(int(offerId.split(":")[-1]))
-
-                for jobID in offerIds:
-                    offerPage = 'https://www.linkedin.com/jobs/view/' + str(jobID)
-                    self.driver.get(offerPage)
+            for url in urlData:        
+                try:
+                    print(f"\nAttempting to process job URL: {url}")
+                    self.driver.get(url)
                     time.sleep(random.uniform(1, constants.botSpeed))
 
-                    countJobs += 1
+                    try:
+                        totalJobs = self.driver.find_element(By.XPATH,'//small').text 
+                        print(f"Found {totalJobs} total jobs")
+                        totalPages = utils.jobsToPages(totalJobs)
+                    except Exception as e:
+                        print(f"Error getting total jobs: {str(e)}")
+                        continue
 
-                    jobProperties = self.getJobProperties(countJobs)
-                    if "blacklisted" in jobProperties: 
-                        lineToWrite = jobProperties + " | " + "* 🤬 Blacklisted Job, skipped!: " +str(offerPage)
-                        self.displayWriteResults(lineToWrite)
-                    
-                    else :                    
-                        easyApplybutton = self.easyApplyButton()
+                    urlWords = utils.urlToKeywords(url)
+                    lineToWrite = "\n Category: " + urlWords[0] + ", Location: " +urlWords[1] + ", Applying " +str(totalJobs)+ " jobs."
+                    self.displayWriteResults(lineToWrite)
 
-                        if easyApplybutton is not False:
-                            easyApplybutton.click()
+                    for page in range(totalPages):
+                        try:
+                            currentPageJobs = constants.jobsPerPage * page
+                            pageUrl = url + "&start=" + str(currentPageJobs)
+                            print(f"\nProcessing page {page + 1}, URL: {pageUrl}")
+                            self.driver.get(pageUrl)
                             time.sleep(random.uniform(1, constants.botSpeed))
-                            
-                            try:
-                                self.chooseResume()
-                                self.driver.find_element(By.CSS_SELECTOR, "button[aria-label='Submit application']").click()
-                                time.sleep(random.uniform(1, constants.botSpeed))
 
-                                lineToWrite = jobProperties + " | " + "* 🥳 Just Applied to this job: "  +str(offerPage)
-                                self.displayWriteResults(lineToWrite)
-                                countApplied += 1
+                            offersPerPage = self.driver.find_elements(By.XPATH, '//li[@data-occludable-job-id]')
+                            print(f"Found {len(offersPerPage)} jobs on this page")
 
-                            except:
+                            offerIds = []
+                            for offer in offersPerPage:
                                 try:
-                                    self.driver.find_element(By.CSS_SELECTOR,"button[aria-label='Continue to next step']").click()
+                                    if not self.element_exists(offer, By.XPATH, ".//*[contains(text(), 'Applied')]"):
+                                        offerId = offer.get_attribute("data-occludable-job-id")
+                                        if offerId:
+                                            offerIds.append(int(offerId.split(":")[-1]))
+                                except Exception as e:
+                                    print(f"Error processing offer: {str(e)}")
+                                    continue
+
+                            for jobID in offerIds:
+                                try:
+                                    print(f"\nProcessing job ID: {jobID}")
+                                    offerPage = 'https://www.linkedin.com/jobs/view/' + str(jobID)
+                                    self.driver.get(offerPage)
                                     time.sleep(random.uniform(1, constants.botSpeed))
-                                    self.chooseResume()
-                                    comPercentage = self.driver.find_element(By.XPATH,'html/body/div[3]/div/div/div[2]/div/div/span').text
-                                    percenNumber = int(comPercentage[0:comPercentage.index("%")])
-                                    result = self.applyProcess(percenNumber,offerPage)
-                                    lineToWrite = jobProperties + " | " + result
-                                    self.displayWriteResults(lineToWrite)
-                                
-                                except Exception: 
-                                    self.chooseResume()
-                                    lineToWrite = jobProperties + " | " + "* 🥵 Cannot apply to this Job! " +str(offerPage)
-                                    self.displayWriteResults(lineToWrite)
-                        else:
-                            lineToWrite = jobProperties + " | " + "* 🥳 Already applied! Job: " +str(offerPage)
-                            self.displayWriteResults(lineToWrite)
 
+                                    countJobs += 1
 
-            utils.prYellow("Category: " + urlWords[0] + "," +urlWords[1]+ " applied: " + str(countApplied) +
-                  " jobs out of " + str(countJobs) + ".")
-        
-        utils.donate(self)
+                                    # Check if easy apply button exists before proceeding
+                                    easyApplyButton = self.easyApplyButton()
+                                    if easyApplyButton is False:
+                                        print("No Easy Apply button found for this job")
+                                        continue
+
+                                    jobProperties = self.getJobProperties(countJobs)
+                                    if "blacklisted" in jobProperties: 
+                                        lineToWrite = jobProperties + " | " + "* 🤬 Blacklisted Job, skipped!: " + str(offerPage)
+                                    else:
+                                        print("Found Easy Apply button, attempting to click")
+                                        easyApplyButton.click()
+                                        time.sleep(random.uniform(1, constants.botSpeed))
+                                        
+                                        # Add debug output before apply process
+                                        print("Starting application process...")
+                                        try:
+                                            # Try to find phone number field immediately after clicking Easy Apply
+                                            phone_result = self.fillPhoneNumber()
+                                            print(f"Phone number fill result: {phone_result}")
+                                            
+                                            result = self.applyProcess(100, offerPage)  # Assume 100% for single page
+                                            lineToWrite = jobProperties + " | " + result
+                                            countApplied += 1
+                                        except Exception as apply_error:
+                                            print(f"Error in application process: {str(apply_error)}")
+                                            lineToWrite = jobProperties + " | " + "* 🥵 Cannot apply to this Job! " + str(offerPage)
+
+                                    self.displayWriteResults(lineToWrite)
+
+                                except Exception as job_error:
+                                    print(f"Error processing job ID {jobID}: {str(job_error)}")
+                                    continue
+
+                        except Exception as page_error:
+                            print(f"Error processing page {page}: {str(page_error)}")
+                            continue
+
+                except Exception as url_error:
+                    print(f"Error processing URL {url}: {str(url_error)}")
+                    continue
+
+        except Exception as main_error:
+            print(f"Major error in linkJobApply: {str(main_error)}")
 
     def chooseResume(self):
         try:
@@ -269,7 +284,7 @@ class Linkedin:
         # Construct detailed job properties string
         textToWrite = (
             f"{count} | Job Title: {jobTitle} | Company: {companyName} | Location: {jobLocation} "
-            f"| Posted: {timeAgoPosted} | Time Applied {datetime.now().strftime("%Y-%m-%d")}" #adds curr date
+            f"| Posted: {timeAgoPosted} | Time Applied {datetime.now().strftime('%Y-%m-%d')}"  # Note the single quotes
         )
 
         return textToWrite
@@ -285,28 +300,120 @@ class Linkedin:
 
         return EasyApplyButton
 
+    def fillPhoneNumber(self):
+        """Attempts to find and fill phone number field using LinkedIn's specific format"""
+        print("Starting phone number fill attempt...")
+        
+        phone_selectors = [
+            "input[id*='phoneNumber-nationalNumber']",
+            "input[class*='fb-dash-form-element__error-field']",
+            ".artdeco-text-input--input[id*='phoneNumber']",
+        ]
+        
+        try:
+            for selector in phone_selectors:
+                print(f"Trying selector: {selector}")
+                phone_inputs = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                print(f"Found {len(phone_inputs)} elements with this selector")
+                
+                if phone_inputs:
+                    for phone_input in phone_inputs:
+                        try:
+                            print("Found phone input field, attempting to fill...")
+                            # Scroll and wait
+                            self.driver.execute_script("arguments[0].scrollIntoView(true);", phone_input)
+                            time.sleep(2)  # Slightly longer wait
+                            
+                            # Clear and click
+                            print("Clearing field...")
+                            phone_input.clear()
+                            print("Clicking field...")
+                            phone_input.click()
+                            time.sleep(1)
+                            
+                            if hasattr(config, 'Phone') and config.Phone.strip():
+                                print(f"Attempting to input phone number: {config.Phone}")
+                                # Try alternative input methods if regular sendKeys fails
+                                try:
+                                    # Method 1: Regular send_keys
+                                    phone_input.send_keys(config.Phone)
+                                except:
+                                    try:
+                                        # Method 2: JavaScript executor
+                                        self.driver.execute_script("arguments[0].value = arguments[1];", phone_input, config.Phone)
+                                    except Exception as js_error:
+                                        print(f"JavaScript input failed: {str(js_error)}")
+                                        return False
+                                
+                                print("Successfully filled phone number")
+                                return True
+                            else:
+                                print("No phone number found in config!")
+                                return False
+                        except Exception as input_error:
+                            print(f"Error filling specific input: {str(input_error)}")
+                            continue
+            
+            print("No phone number field found with any selector")
+            return False
+        except Exception as e:
+            print(f"Error in fillPhoneNumber: {str(e)}")
+            return False
+
     def applyProcess(self, percentage, offerPage):
-        applyPages = math.floor(100 / percentage) - 2 
+        print("\n=== Starting application process ===")
+        applyPages = math.floor(100 / percentage) - 2
         result = ""
-        for pages in range(applyPages):  
-            self.driver.find_element(By.CSS_SELECTOR, "button[aria-label='Continue to next step']").click()
+        
+        try:
+            # First, let's see what's on the page
+            print("Current page elements:")
+            page_source = self.driver.page_source
+            if 'phoneNumber' in page_source:
+                print("Phone number field detected in page source")
+            if 'nationalNumber' in page_source:
+                print("National number field detected in page source")
+                
+            # Try to fill phone
+            phone_result = self.fillPhoneNumber()
+            print(f"Phone number fill attempt result: {phone_result}")
 
-        self.driver.find_element( By.CSS_SELECTOR, "button[aria-label='Review your application']").click()
-        time.sleep(random.uniform(1, constants.botSpeed))
+            for pages in range(applyPages):
+                print(f"Handling page {pages + 1} of {applyPages}")
+                try:
+                    next_button = self.driver.find_element(By.CSS_SELECTOR, "button[aria-label='Continue to next step']")
+                    next_button.click()
+                    time.sleep(random.uniform(1, constants.botSpeed))
+                except Exception as next_error:
+                    print(f"Error clicking next button: {str(next_error)}")
+                    raise
 
-        if config.followCompanies is False:
-            try:
-                self.driver.find_element(By.CSS_SELECTOR, "label[for='follow-company-checkbox']").click()
-            except:
-                pass
+            print("Attempting to click review button")
+            review_button = self.driver.find_element(By.CSS_SELECTOR, "button[aria-label='Review your application']")
+            review_button.click()
+            time.sleep(random.uniform(1, constants.botSpeed))
 
-        self.driver.find_element(By.CSS_SELECTOR, "button[aria-label='Submit application']").click()
-        time.sleep(random.uniform(1, constants.botSpeed))
+            if config.followCompanies is False:
+                try:
+                    follow_checkbox = self.driver.find_element(By.CSS_SELECTOR, "label[for='follow-company-checkbox']")
+                    follow_checkbox.click()
+                except Exception as follow_error:
+                    print(f"Warning - Could not uncheck follow company: {str(follow_error)}")
 
-        result = "* 🥳 Just Applied to this job: " + str(offerPage)
+            print("Attempting to submit application")
+            submit_button = self.driver.find_element(By.CSS_SELECTOR, "button[aria-label='Submit application']")
+            submit_button.click()
+            time.sleep(random.uniform(1, constants.botSpeed))
 
+            result = "* 🥳 Successfully applied to this job: " + str(offerPage)
+
+        except Exception as e:
+            print(f"Detailed error in application process: {str(e)}")
+            result = f"* 🥵 Cannot apply to this Job! {str(offerPage)}"
+
+        print(f"Application process result: {result}")
         return result
-
+    
     def displayWriteResults(self,lineToWrite: str):
         try:
             print(lineToWrite)

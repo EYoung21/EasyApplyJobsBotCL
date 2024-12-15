@@ -104,10 +104,21 @@ def donate(self):
 class LinkedinUrlGenerate:
     def generateUrlLinks(self):
         path = []
+        from urllib.parse import quote
         for location in config.location:
             for keyword in config.keywords:
-                    url = constants.linkJobUrl + "?keywords=" +keyword+self.jobType()+self.remote()+self.checkJobLocation(location)+self.jobExp()+self.datePosted()+self.salary()+self.sortBy()+self.easyApply()
-                    path.append(url)
+                encoded_keyword = quote(keyword)
+                # Remove the extra ? since it's already in the base URL
+                url = constants.linkJobUrl + "keywords=" + encoded_keyword + \
+                    self.jobType() + self.remote() + \
+                    self.checkJobLocation(location) + self.jobExp() + \
+                    self.datePosted() + self.salary() + \
+                    self.sortBy() + self.easyApply()
+                # print(f"Debug - Generated URL parameters:")
+                # print(f"Original Keyword: {keyword}")
+                # print(f"Encoded Keyword: {encoded_keyword}")
+                # print(f"Full URL: {url}")
+                path.append(url)
         return path
 
     def easyApply(self):
